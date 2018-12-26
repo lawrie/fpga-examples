@@ -1,4 +1,3 @@
-
 `include "hvsync_generator.v"
 `include "digits10.v"
 `include "scoreboard.v"
@@ -7,60 +6,56 @@
 A brick-smashing ball-and-paddle game.
 */
 
-module ball_paddle_top(clk, reset, hpaddle, out);
+module top(clk, hsync, vsync, rgb, up, left, down, right);
 
   input clk;
-  input reset;
-  input hpaddle;
-  wire hsync, vsync;
-  output [1:0] out;
-  
+  output hsync, vsync;
+  output [2:0] rgb;
+  input up, left, down, right;
   wire display_on;
   wire [8:0] hpos;
   wire [8:0] vpos;
-  
-  reg [8:0] paddle_pos;	// paddle X position
-  
-  reg [8:0] ball_x;	// ball X position
-  reg [8:0] ball_y;	// ball Y position
-  reg ball_dir_x;	// ball X direction (0=left, 1=right)
-  reg ball_speed_x;	// ball speed (0=1 pixel/frame, 1=2 pixels/frame)
-  reg ball_dir_y;	// ball Y direction (0=up, 1=down)
-  
+
+  wire reset;
+  assign reset = ~(up);
+
+  reg [7:0] paddle_pos; // paddle X position
+
+  reg [9:0] ball_x; // ball X position
+  reg [9:0] ball_y; // ball Y position
+  reg ball_dir_x;   // ball X direction (0=left, 1=right)
+  reg ball_speed_x; // ball speed (0=1 pixel/frame, 1=2 pixels/frame)
+  reg ball_dir_y;   // ball Y direction (0=up, 1=down)
+
   reg brick_array [0:BRICKS_H*BRICKS_V-1]; // 16*8 = 128 bits
 
-  wire [3:0] score0;	// score right digit
-  wire [3:0] score1;	// score left digit
-  wire [3:0] lives;	// # lives remaining
-  reg incscore;		// incscore signal 
+  wire [3:0] score0;    // score right digit
+  wire [3:0] score1;    // score left digit
+  wire [3:0] lives; // # lives remaining
+  reg incscore;     // incscore signal
   reg declives = 0; // TODO
-  
-  localparam BRICKS_H = 16;	// # of bricks across
-  localparam BRICKS_V = 8;	// # of bricks down
+
+  localparam BRICKS_H = 16; // # of bricks across
+  localparam BRICKS_V = 8;  // # of bricks down
 
   localparam BALL_DIR_LEFT = 0;
   localparam BALL_DIR_RIGHT = 1;
   localparam BALL_DIR_DOWN = 1;
   localparam BALL_DIR_UP = 0;
-  
-  localparam PADDLE_WIDTH = 31;	// horizontal paddle size
-  localparam BALL_SIZE = 6;	// square ball size
 
-  reg clk2;
-  always @(posedge clk) begin
-    clk2 <= !clk2;
-  end
+  localparam PADDLE_WIDTH = 31; // horizontal paddle size
+  localparam BALL_SIZE = 6; // square ball size
 
-  hvsync_generator #(256,60,40,25) hvsync_gen(
-    .clk(clk2),
-    .reset(reset),
+  // video sync generator
+  hvsync_generator hvsync_gen(
+    .clk(clk),
     .hsync(hsync),
     .vsync(vsync),
     .display_on(display_on),
-    .hpos(hpos),
-    .vpos(vpos)
+    .hpos_scaled(hpos),
+    .vpos_scaled(vpos)
   );
-  
+
   // scoreboard
   wire score_gfx; // output from score generator
   player_stats stats(
@@ -77,12 +72,12 @@ module ball_paddle_top(clk, reset, hpaddle, out);
     .score1(score1),
     .lives(lives),
     .vpos(vpos),
-    .hpos(hpos), 
+    .hpos(hpos),
     .board_gfx(score_gfx)
   );
 
-  wire [5:0] hcell = hpos[8:3];		// horizontal brick index
-  wire [5:0] vcell = vpos[8:3];		// vertical brick index
+  wire [5:0] hcell = hpos[8:3];     // horizontal brick index
+  wire [5:0] vcell = vpos[8:3];     // vertical brick index
   wire lr_border = hcell==0 || hcell==31; // along horizontal border?
 
   // TODO: unsigned compare doesn't work in JS
@@ -92,21 +87,21 @@ module ball_paddle_top(clk, reset, hpaddle, out);
   wire paddle_gfx = (vcell == 28) && (paddle_rel_x < PADDLE_WIDTH);
 
   // difference between ball position and video beam
-  wire [8:0] ball_rel_x = (hpos - ball_x);
-  wire [8:0] ball_rel_y = (vpos - ball_y);
+  wire [8:0] ball_rel_x = (hpos - ball_x[9:1]);
+  wire [8:0] ball_rel_y = (vpos - ball_y[9:1]);
 
   // ball graphics signal
   wire ball_gfx = ball_rel_x < BALL_SIZE
-  	       && ball_rel_y < BALL_SIZE;
+           && ball_rel_y < BALL_SIZE;
 
-  reg main_gfx;		// main graphics signal (bricks and borders)
-  reg brick_present;	// 1 when we are drawing a brick
+  reg main_gfx;     // main graphics signal (bricks and borders)
+  reg brick_present;    // 1 when we are drawing a brick
   reg [6:0] brick_index;// index into array of current brick
   // brick graphics signal
   wire brick_gfx = lr_border || (brick_present && vpos[2:0] != 0 && hpos[3:1] != 4);
-  
+
   // scan bricks: compute brick_index and brick_present flag
-  always @(posedge clk2)
+  always @(posedge clk)
     // see if we are scanning brick area
     if (vpos[8:6] == 1 && !lr_border)
     begin
@@ -123,24 +118,26 @@ module ball_paddle_top(clk, reset, hpaddle, out);
     end else begin
       brick_present <= 0;
     end
-  
+
   // only works when paddle at bottom of screen!
   // (we don't want to mess w/ paddle position during visible portion)
-  always @(posedge hsync)
-    if (!hpaddle)
-      paddle_pos <= vpos;
+  always @(negedge vsync)
+    if (!left && paddle_pos > 0)
+      paddle_pos <= paddle_pos - 1;
+    else if (!right && paddle_pos < 225)
+      paddle_pos <= paddle_pos + 1;
 
   // 1 when ball signal intersects main (brick + border) signal
   wire ball_pixel_collide = main_gfx & ball_gfx;
-  
+
   reg ball_collide_paddle = 0;
   reg [3:0] ball_collide_bits = 0;
 
   // compute ball collisions with paddle and playfield
-  always @(posedge clk2)
+  always @(posedge clk)
     // clear all collide bits for frame
-    if (vsync) begin
-      ball_collide_bits <= 0; 
+    if (vsync == 0) begin
+      ball_collide_bits <= 0;
       ball_collide_paddle <= 0;
     end else begin
       if (ball_pixel_collide) begin
@@ -157,7 +154,7 @@ module ball_paddle_top(clk, reset, hpaddle, out);
     end
 
   // compute ball collisions with brick and increment score
-  always @(posedge clk2)
+  always @(posedge clk)
     if (ball_pixel_collide && brick_present) begin
       brick_array[brick_index] <= 1;
       incscore <= 1; // increment score
@@ -166,16 +163,16 @@ module ball_paddle_top(clk, reset, hpaddle, out);
     end
 
   // computes position of ball in relation to center of paddle
-  wire signed [8:0] ball_paddle_dx = ball_x - paddle_pos + 8;
+  wire signed [8:0] ball_paddle_dx = ball_x[9:1] - paddle_pos + 8;
 
   // ball bounce: determine new velocity/direction
-  always @(posedge vsync or posedge reset)
+  always @(negedge vsync or posedge reset)
     begin
       if (reset) begin
         ball_dir_y <= BALL_DIR_DOWN;
       end else
       // ball collided with paddle?
-      if (ball_collide_paddle) begin 
+      if (ball_collide_paddle) begin
         // bounces upward off of paddle
         ball_dir_y <= BALL_DIR_UP;
         // which side of paddle, left/right?
@@ -207,14 +204,14 @@ module ball_paddle_top(clk, reset, hpaddle, out);
         endcase
       end
     end
-  
+
   // ball motion: update ball position
-  always @(negedge vsync or posedge reset)
+  always @(posedge vsync or posedge reset)
     begin
       if (reset) begin
         // reset ball position to top center
-        ball_x <= 128;
-        ball_y <= 180;
+        ball_x <= 256;
+        ball_y <= 360;
       end else begin
         // move ball horizontal and vertical position
         if (ball_dir_x == BALL_DIR_RIGHT)
@@ -224,7 +221,7 @@ module ball_paddle_top(clk, reset, hpaddle, out);
         ball_y <= ball_y + (ball_dir_y==BALL_DIR_DOWN?1:-1);
       end
     end
-  
+
   // compute main_gfx
   always @(*)
     begin
@@ -240,11 +237,10 @@ module ball_paddle_top(clk, reset, hpaddle, out);
     end
 
   // combine signals to RGB output
+  wire grid_gfx = (((hpos&7)==0) || ((vpos&7)==0));
   wire r = display_on && (ball_gfx | paddle_gfx);
   wire g = display_on && (main_gfx | ball_gfx);
-  wire b = display_on && (ball_gfx | brick_present);
-
-  assign out = (hsync||vsync) ? 0 : (1+g+(r|b));
+  wire b = display_on && (grid_gfx | ball_gfx | brick_present);
+  assign rgb = {b,g,r};
 
 endmodule
-

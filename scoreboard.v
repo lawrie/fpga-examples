@@ -1,4 +1,3 @@
-
 `ifndef SCOREBOARD_H
 `define SCOREBOARD_H
 
@@ -11,7 +10,7 @@ scoreboard_generator - Outputs video signal with score/lives digits.
 */
 
 module player_stats(reset, score0, score1, lives, incscore, declives);
-  
+
   input reset;
   output reg [3:0] score0;
   output reg [3:0] score1;
@@ -53,7 +52,7 @@ module scoreboard_generator(score0, score1, lives, vpos, hpos, board_gfx);
 
   reg [3:0] score_digit;
   reg [4:0] score_bits;
-  
+
   always @(*)
     begin
       case (hpos[7:5])
@@ -63,7 +62,7 @@ module scoreboard_generator(score0, score1, lives, vpos, hpos, board_gfx);
         default: score_digit = 15; // no digit
       endcase
     end
-  
+
   digits10_array digits(
     .digit(score_digit),
     .yofs(vpos[4:2]),
@@ -71,7 +70,7 @@ module scoreboard_generator(score0, score1, lives, vpos, hpos, board_gfx);
   );
 
   assign board_gfx = score_bits[hpos[4:2] ^ 3'b111];
-  
+
 endmodule
 
 module scoreboard_top(clk, reset, hsync, vsync, rgb);
@@ -82,7 +81,7 @@ module scoreboard_top(clk, reset, hsync, vsync, rgb);
   wire display_on;
   wire [8:0] hpos;
   wire [8:0] vpos;
-  
+
   wire board_gfx;
 
   hvsync_generator hvsync_gen(
@@ -94,7 +93,7 @@ module scoreboard_top(clk, reset, hsync, vsync, rgb);
     .hpos(hpos),
     .vpos(vpos)
   );
-  
+
   scoreboard_generator scoreboard_gen(
     .score0(0),
     .score1(1),

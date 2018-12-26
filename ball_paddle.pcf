@@ -1,0 +1,10 @@
+set_io up        51
+set_io left      52
+set_io down      53
+set_io right     54
+set_io rgb[0]    25
+set_io rgb[1]    24
+set_io rgb[2]    20
+set_io hsync     19
+set_io vsync     18
+set_io clk       15
