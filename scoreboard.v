@@ -55,15 +55,13 @@ module scoreboard_generator(score0, score1, lives, vpos, hpos, board_gfx);
 
   always @(*)
     begin
-      case (hpos[7:5])
-        1: score_digit = score1;
-        2: score_digit = score0;
-        6: score_digit = lives;
-        default: score_digit = 15; // no digit
-      endcase
+      if (hpos>=44 && hpos<64) score_digit = score1;
+      else if (hpos>=76 && hpos<96) score_digit = score0;
+      else if (hpos>=204 && hpos<224) score_digit = lives;
+      else score_digit = 15; // no digit
     end
 
-  digits10_array digits(
+  digits10_case digits(
     .digit(score_digit),
     .yofs(vpos[4:2]),
     .bits(score_bits)
